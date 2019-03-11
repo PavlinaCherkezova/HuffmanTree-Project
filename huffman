@@ -1,0 +1,301 @@
+#include <iostream>
+#include <vector>
+#include <cassert>
+#include <algorithm>
+#include <stack>
+#include <string>
+#include <fstream>
+#include <cstring>
+using namespace std;
+
+struct Pair
+{
+    char symbol;
+    size_t frequency;
+    string code;
+
+    Pair(const char& s, size_t freq = 0, string c = "") : symbol(s), frequency(freq), code(c) {}
+};
+struct HuffmanTable
+{
+    vector<Pair> table;
+};
+struct HuffmanTree
+{
+    Pair data;
+    size_t weight;
+    HuffmanTree *left, *right;
+    HuffmanTree(Pair& d, size_t w = 0, HuffmanTree *l = nullptr, HuffmanTree *r = nullptr) : data(d), weight(w), left(l), right(r) {}
+};
+struct HuffmanObject
+{
+    HuffmanTable* table;
+    HuffmanTree* tree;
+
+    string decimal;
+    string binary;
+
+    HuffmanObject(HuffmanTable* t = nullptr, HuffmanTree* root = nullptr, string dec = "", string bin= "") : table(t), tree(root), decimal(dec), binary(bin){}
+};
+void makeTable (HuffmanTable* htable, const char* str)
+{
+    assert(str[0] != '\0');
+    bool flag = false;
+
+    for(auto isAdded : htable->table)
+    {
+        if(isAdded.symbol == str[0])
+        {
+            isAdded.frequency++;
+            flag = true;
+        }
+    }
+    if(flag == false)
+    {
+        Pair toAdd (str[0], 1);
+        htable->table.push_back(toAdd);
+    }
+    makeTable(htable, str + 1);
+}
+
+bool sortTable (Pair& p1, Pair& p2)
+{
+    return p1.frequency > p2.frequency;
+}
+void buildHTree (HuffmanTree*& root, HuffmanTable* htable)
+{
+    sort(htable->table.begin(), htable->table.end(), sortTable);
+    stack<HuffmanTree*> allNodes;
+    for(auto pair : htable->table)
+    {
+        allNodes.push(new HuffmanTree(pair));
+    }
+
+    while (allNodes.size() != 1)
+	{
+        HuffmanTree *first, *second;
+
+		first = allNodes.top();
+		allNodes.pop();
+
+		second = allNodes.top();
+		allNodes.pop();
+
+        Pair crr ('\0',first->data.frequency + second->data.frequency);
+		HuffmanTree *newElement = new HuffmanTree(crr, 0, first, second);
+
+		allNodes.push(newElement);
+	}
+    root = allNodes.top();
+	allNodes.pop();
+}
+void setWeight (HuffmanTree* root)
+{
+    if(root->right != nullptr) root->right->weight = 1;
+    setWeight(root->left);
+    setWeight(root->right);
+}
+void encode (HuffmanTree* root, HuffmanTable* htable, string str) // code to letter
+{
+    if(root->left == nullptr && root->right == nullptr)
+    {
+        root->data.code = str;
+        for(auto pair: htable->table)
+        {
+            if(pair.symbol == root->data.symbol) pair.code = str;
+        }
+    }
+    else
+    {
+        if (root->left != nullptr)
+        {
+            string temp = to_string(root->left->weight);
+            encode(root->left, htable, str);
+        }
+        if (root->right != nullptr)
+        {
+            string temp = to_string(root->right->weight);
+            encode(root->right, htable, str);
+        }
+    }
+}
+string stringToBinary (HuffmanTable* htable, const char* str)
+{
+    string binaryCode = "";
+    for(size_t i = 0; str[i] != '\0'; i++)
+    {
+        for(auto pair : htable->table)
+        {
+            if(pair.symbol == str[i]) binaryCode.append(pair.code);
+        }
+    }
+    return binaryCode;
+}
+
+int binaryToDec(string str)
+{
+	int size = str.length();
+	int decimal = 0;
+
+	for (int index = 0; index < size; index++)
+	{
+		decimal += (str[index] == '1' ? pow(2, size - index - 1) : 0);
+	}
+    assert(decimal >= 0 && decimal <= 255);
+	return decimal;
+}
+void takeBitsPortion (string& str, string toDecimal, int lastPortionIndex)
+{
+    int counter = 0;
+    for(size_t i = lastPortionIndex; counter <= 8 || i < str.size(); i++)
+    {
+        counter++;
+    }
+    toDecimal = str.substr(lastPortionIndex, (lastPortionIndex + counter));
+}
+string codeToDecimal (string& str)
+{
+    string toDecimal = "";
+    size_t index = 0;
+    while(index < str.size())
+    {
+        string crr;
+        takeBitsPortion(str, crr, index);
+
+        string temp = to_string(binaryToDec(crr));
+        toDecimal.append(temp);
+        toDecimal.append("");
+
+        index += crr.size();
+    }
+    return toDecimal;
+}
+string decode (HuffmanTree* root, string binary)
+{
+    string decoded = "";
+    HuffmanTree* crr = root;
+    for (size_t index = 0; index < binary.length(); index++)
+	{
+		if (binary[index] == '0')
+		{
+			crr = crr->left;
+		}
+		else
+		{
+			crr = crr->right;
+		}
+
+		if (crr->left == nullptr && crr->right == nullptr)
+		{
+			decoded.push_back(crr->data.symbol);
+			crr = root;
+		}
+	}
+	return decoded;
+}
+void doHufmman (const char* str, HuffmanObject& object)
+{
+    makeTable(object.table,str);
+
+    buildHTree(object.tree,object.table);
+    setWeight(object.tree);
+
+    string temp = "";
+    encode(object.tree,object.table, temp);
+
+    object.binary = stringToBinary(object.table, str);
+    object.decimal = codeToDecimal(object.binary);
+}
+double compressedWith (HuffmanObject& crr, const char* str)
+{
+    return (sizeof(str) / sizeof(crr.binary));
+}
+const char* inputFromFile(const string &fileName)
+{
+	ifstream in(fileName);
+    string myString = "";
+
+	if (!in.is_open())
+	{
+		cout << "Cannot open file";
+	}
+	else
+	{
+		getline(in, myString);
+	}
+
+	in.close();
+
+	const char* str = myString.c_str();
+    return str;
+}
+void archiveBinaryToFile(string &fileNameOut, const string& fileNameIn)
+{
+    string extension = ".txt";
+	fileNameOut += extension;
+    ofstream out(fileNameOut.c_str());
+
+    const char* str;
+    str = inputFromFile(fileNameIn);
+
+    HuffmanObject crr;
+    doHufmman(str, crr);
+	if (out.is_open())
+	{
+		 out<< crr.binary <<endl;
+	}
+	else
+	{
+		cout << "Cannot open file";
+	}
+
+	out.close();
+}
+void archiveDecimalToFile(string &fileNameOut, const string& fileNameIn)
+{
+    string extension = ".txt";
+	fileNameOut += extension;
+    ofstream out(fileNameOut.c_str());
+
+    const char* str;
+    str = inputFromFile(fileNameIn);
+
+    HuffmanObject crr;
+    doHufmman(str, crr);
+	if (out.is_open())
+	{
+		 out<< crr.decimal <<endl;
+	}
+	else
+	{
+		cout << "Cannot open file";
+	}
+
+	out.close();
+}
+void treeInFile(HuffmanTree* root, ofstream& out)
+{
+	if (out.is_open())
+	{
+        if (!root)
+        {
+            out<<"Empty"<<endl;
+        }
+        else
+        {
+            //out<<crr.tree->data<<endl;
+
+            treeInFile(root->left, out);
+            treeInFile(root->right, out);
+        }
+	}
+	else
+	{
+		cout<<"Cannot open file";
+	}
+}
+int main()
+{
+    cout << "Hello world!" << endl;
+    return 0;
+}
